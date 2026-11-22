@@ -1,11 +1,19 @@
-// ===== TIC-TAC-TOE: te vagy az X, a gép az O =====
+// ===== TIC-TAC-TOE: gép ellen vagy 2 játékos =====
 
 var cellak = document.querySelectorAll("#tabla button");
+var tablaDoboz = document.getElementById("tabla");
 var uzenet = document.getElementById("uzenet");
 var ujJatek = document.getElementById("ujjatek");
+var modGep = document.getElementById("modgep");
+var modKetto = document.getElementById("modketto");
 
-var tabla = ["", "", "", "", "", "", "", "", ""];   // a 9 mező tartalma
-var vege = false;                                   // véget ért a játék?
+var mod = "gep";          // "gep" = gép ellen, "ketto" = 2 játékos
+var tabla = [];           // a 9 mező tartalma ("X", "O" vagy "")
+var aktualis = "X";       // ki jön éppen
+var vege = false;         // véget ért a játék?
+var gepLep = false;       // igaz, amíg a gép "gondolkodik" (ilyenkor nem lehet kattintani)
+var idozito = null;       // a gép lépésének időzítője
+var nyertSor = null;      // a nyerő három mező sorszáma
 
 // Ezek a nyerő sorok (a mezők sorszáma 0-tól 8-ig)
 var nyeroSorok = [
@@ -14,26 +22,29 @@ var nyeroSorok = [
   [0, 4, 8], [2, 4, 6]               // átlósan
 ];
 
-// Megnézi, nyert-e valaki. Visszaadja az "X" vagy "O" betűt, "dontetlen"-t, vagy "" ha még megy a játék.
-function eredmeny() {
+// Megkeresi a nyerő sort. Ha nincs, null-t ad vissza.
+function nyeroSorKeres() {
   for (var i = 0; i < nyeroSorok.length; i++) {
-    var a = nyeroSorok[i][0];
-    var b = nyeroSorok[i][1];
-    var c = nyeroSorok[i][2];
-    if (tabla[a] !== "" && tabla[a] === tabla[b] && tabla[a] === tabla[c]) {
-      return tabla[a];
+    var s = nyeroSorok[i];
+    if (tabla[s[0]] !== "" && tabla[s[0]] === tabla[s[1]] && tabla[s[0]] === tabla[s[2]]) {
+      return s;
     }
   }
-  if (tabla.indexOf("") === -1) {
-    return "dontetlen";
-  }
-  return "";
+  return null;
 }
 
+// Kirajzolja a táblát. Letiltja a mezőket, ha nem szabad rájuk kattintani.
 function frissit() {
   for (var i = 0; i < 9; i++) {
+    var osztaly = tabla[i] === "X" ? "x" : tabla[i] === "O" ? "o" : "";
+    if (nyertSor && nyertSor.indexOf(i) !== -1) {
+      osztaly += " nyero";
+    }
     cellak[i].textContent = tabla[i];
+    cellak[i].className = osztaly;
+    cellak[i].disabled = vege || gepLep || tabla[i] !== "";
   }
+  tablaDoboz.className = gepLep ? "var" : "";
 }
 
 function veletlenMezo() {
@@ -44,56 +55,80 @@ function veletlenMezo() {
       uresek.push(i);
     }
   }
-  var veletlen = Math.floor(Math.random() * uresek.length);
-  return uresek[veletlen];
+  return uresek[Math.floor(Math.random() * uresek.length)];
 }
 
-function vegeEllenorzes() {
-  var e = eredmeny();
-  if (e === "X") {
-    uzenet.textContent = "Nyertél! Gratulálok!";
-  } else if (e === "O") {
-    uzenet.textContent = "A gép nyert. Próbáld újra!";
-  } else if (e === "dontetlen") {
+// Megnézi, vége van-e a játéknak, és kiírja az eredményt.
+function kiertekel() {
+  nyertSor = nyeroSorKeres();
+  if (nyertSor) {
+    vege = true;
+    var jel = tabla[nyertSor[0]];
+    if (mod === "gep") {
+      uzenet.textContent = jel === "X" ? "Nyertél! Gratulálok!" : "A gép nyert. Próbáld újra!";
+    } else {
+      uzenet.textContent = jel + " nyert! Gratulálok!";
+    }
+  } else if (tabla.indexOf("") === -1) {
+    vege = true;
     uzenet.textContent = "Döntetlen.";
-  } else {
-    return false;
   }
-  vege = true;
-  return true;
+}
+
+function gepLepese() {
+  idozito = null;
+  gepLep = false;                     // most már megint lehet kattintani
+  tabla[veletlenMezo()] = "O";
+  kiertekel();
+  if (!vege) {
+    aktualis = "X";
+    uzenet.textContent = "Te jössz (X).";
+  }
+  frissit();
 }
 
 function kattintas(szam) {
-  if (vege || tabla[szam] !== "") {
-    return;   // foglalt mezőre vagy játék végén nem történik semmi
+  if (vege || gepLep || tabla[szam] !== "") {
+    return;   // foglalt mezőre, a játék végén vagy a gép lépése közben nem történik semmi
   }
 
-  // 1. Te lépsz
-  tabla[szam] = "X";
-  frissit();
-  if (vegeEllenorzes()) {
-    return;
-  }
+  tabla[szam] = aktualis;
+  kiertekel();
 
-  // 2. A gép lép egy kis várakozás után
-  uzenet.textContent = "A gép gondolkodik...";
-  setTimeout(function () {
-    tabla[veletlenMezo()] = "O";
-    frissit();
-    if (!vegeEllenorzes()) {
-      uzenet.textContent = "Te jössz (X).";
+  if (!vege) {
+    if (mod === "gep") {
+      aktualis = "O";
+      gepLep = true;                  // a gép jön: a tábla zárolva van
+      uzenet.textContent = "A gép gondolkodik...";
+      idozito = setTimeout(gepLepese, 600);
+    } else {
+      aktualis = aktualis === "X" ? "O" : "X";
+      uzenet.textContent = aktualis + " jön.";
     }
-  }, 500);
+  }
+  frissit();
 }
 
 function ujra() {
+  clearTimeout(idozito);              // ha a gép épp lépni készült, ezt töröljük
+  idozito = null;
   tabla = ["", "", "", "", "", "", "", "", ""];
+  aktualis = "X";
   vege = false;
+  gepLep = false;
+  nyertSor = null;
+  uzenet.textContent = mod === "gep" ? "Te kezdesz (X)." : "X kezd.";
   frissit();
-  uzenet.textContent = "Te kezdesz (X).";
 }
 
-// Mezők és gomb összekötése
+function modValasztas(ujMod) {
+  mod = ujMod;
+  modGep.setAttribute("aria-pressed", ujMod === "gep");
+  modKetto.setAttribute("aria-pressed", ujMod === "ketto");
+  ujra();
+}
+
+// Mezők és gombok összekötése
 for (var i = 0; i < 9; i++) {
   (function (szam) {
     cellak[szam].addEventListener("click", function () {
@@ -102,3 +137,7 @@ for (var i = 0; i < 9; i++) {
   })(i);
 }
 ujJatek.addEventListener("click", ujra);
+modGep.addEventListener("click", function () { modValasztas("gep"); });
+modKetto.addEventListener("click", function () { modValasztas("ketto"); });
+
+ujra();   // induló állapot
